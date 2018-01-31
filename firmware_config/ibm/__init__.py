@@ -25,11 +25,14 @@ SIZE_COMMAND = [0x06]
 
 
 class IBMFirmwareConfig(FirmwareConfig):
-    def __init__(self, host, user, password):
-        self.connection = None
+    def __init__(self, host, user, password, ipmicmd=None):
         super(IBMFirmwareConfig, self).__init__(host, user, password)
+        self.connection = ipmicmd
+        self.reusesession = ipmicmd
 
     def imm_connect(self, host, username, password):
+        if self.reusesession:
+            return
         try:
             connection = command.Command(bmc=host, userid=username,
                                          password=password)
