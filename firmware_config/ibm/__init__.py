@@ -256,7 +256,10 @@ class IBMFirmwareConfig(FirmwareConfig):
                 continue
             if options[option]['pending'] == options[option]['new_value']:
                 continue
-
+            if (isinstance(options[option]['new_value'], str) or
+                    isinstance(options[option]['new_value'], unicode)):
+                # Coerce a simple string parameter to the expected list format
+                options[option]['new_value'] = [options[option]['new_value']]
             options[option]['pending'] = options[option]['new_value']
 
             is_list = options[option]['is_list']
