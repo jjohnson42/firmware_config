@@ -14,7 +14,7 @@ from firmware_config import exceptions as exc
 
 IMM_NETFN = 0x2e
 IMM_COMMAND = 0x90
-IBM_ENTERPRISE = [0x4d, 0x4f, 0x00]
+LENOVO_ENTERPRISE = [0x4d, 0x4f, 0x00]
 
 OPEN_RO_COMMAND = [0x01, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10]
 OPEN_WO_COMMAND = [0x01, 0x03, 0x01]
@@ -24,9 +24,9 @@ CLOSE_COMMAND = [0x05]
 SIZE_COMMAND = [0x06]
 
 
-class IBMFirmwareConfig(FirmwareConfig):
+class LenovoFirmwareConfig(FirmwareConfig):
     def __init__(self, host, user, password, ipmicmd=None):
-        super(IBMFirmwareConfig, self).__init__(host, user, password)
+        super(LenovoFirmwareConfig, self).__init__(host, user, password)
         self.connection = ipmicmd
         self.reusesession = ipmicmd
 
@@ -44,7 +44,7 @@ class IBMFirmwareConfig(FirmwareConfig):
 
     def imm_size(self, filename):
         data = []
-        data += IBM_ENTERPRISE
+        data += LENOVO_ENTERPRISE
         data += SIZE_COMMAND
         for i in range(len(filename)):
             data += [ord(filename[i])]
@@ -61,7 +61,7 @@ class IBMFirmwareConfig(FirmwareConfig):
         response = None
         retries = 6
         data = []
-        data += IBM_ENTERPRISE
+        data += LENOVO_ENTERPRISE
         if write is False:
             data += OPEN_RO_COMMAND
         else:
@@ -98,7 +98,7 @@ class IBMFirmwareConfig(FirmwareConfig):
 
     def imm_close(self, filehandle):
         data = []
-        data += IBM_ENTERPRISE
+        data += LENOVO_ENTERPRISE
         data += CLOSE_COMMAND
 
         hex_filehandle = struct.pack("<I", filehandle)
@@ -118,7 +118,7 @@ class IBMFirmwareConfig(FirmwareConfig):
 
         while remaining > 0:
             data = []
-            data += IBM_ENTERPRISE
+            data += LENOVO_ENTERPRISE
             data += WRITE_COMMAND
             for byte in hex_filehandle[:4]:
                 data += [ord(byte)]
@@ -149,7 +149,7 @@ class IBMFirmwareConfig(FirmwareConfig):
 
         while remaining > 0:
             data = []
-            data += IBM_ENTERPRISE
+            data += LENOVO_ENTERPRISE
             data += READ_COMMAND
             for byte in hex_filehandle[:4]:
                 data += [ord(byte)]
@@ -182,7 +182,7 @@ class IBMFirmwareConfig(FirmwareConfig):
 
     def get_fw_options(self):
         options = {}
-        for i in range(0, 10):
+        for i in range(0, 15):
             self.imm_connect(self.host, self.user, self.password)
             filehandle = self.imm_open("config.efi")
             size = self.imm_size("config.efi")
@@ -190,19 +190,20 @@ class IBMFirmwareConfig(FirmwareConfig):
             self.imm_close(filehandle)
             data = EfiDecompressor.Decompress(data)
             if len(data) != 0:
-                break;
-
-            time.sleep(10)
+                break
+            time.sleep(2)
 
         xml = etree.fromstring(data)
 
         for config in xml.iter("config"):
-            ibm_id = config.get("ID")
+            lenovo_id = config.get("ID")
             for group in config.iter("group"):
-                ibm_group = group.get("ID")
+                lenovo_group = group.get("ID")
                 for setting in group.iter("setting"):
                     is_list = False
-                    ibm_setting = setting.get("ID")
+                    lenovo_setting = setting.get("ID")
+                    protect = True if setting.get("protected") == 'true' \
+                        else False
                     possible = []
                     current = None
                     default = None
@@ -226,18 +227,19 @@ class IBMFirmwareConfig(FirmwareConfig):
                             default = label
                         if choice.get("reset-required") == "true":
                             reset = True
-                    optionname = "%s.%s" % (ibm_id, name)
+                    optionname = "%s.%s" % (lenovo_id, name)
                     options[optionname] = dict(current=current,
                                                default=default,
                                                possible=possible,
                                                pending=None,
                                                new_value=None,
                                                is_list=is_list,
-                                               ibm_id=ibm_id,
-                                               ibm_group=ibm_group,
-                                               ibm_setting=ibm_setting,
-                                               ibm_reboot=reset,
-                                               ibm_instance="")
+                                               lenovo_id=lenovo_id,
+                                               lenovo_group=lenovo_group,
+                                               lenovo_setting=lenovo_setting,
+                                               lenovo_reboot=reset,
+                                               lenovo_protect=protect,
+                                               lenovo_instance="")
 
         return options
 
@@ -268,12 +270,12 @@ class IBMFirmwareConfig(FirmwareConfig):
             is_list = options[option]['is_list']
             count = 0
             changes = True
-            config = etree.Element('config', ID=options[option]['ibm_id'])
+            config = etree.Element('config', ID=options[option]['lenovo_id'])
             configurations.append(config)
-            group = etree.Element('group', ID=options[option]['ibm_group'])
+            group = etree.Element('group', ID=options[option]['lenovo_group'])
             config.append(group)
             setting = etree.Element('setting',
-                                    ID=options[option]['ibm_setting'])
+                                    ID=options[option]['lenovo_setting'])
             group.append(setting)
 
             if is_list:
@@ -292,14 +294,14 @@ class IBMFirmwareConfig(FirmwareConfig):
                 if is_list:
                     count += 1
                     instance = etree.Element('instance',
-                                             ID=options[option]['ibm_instance'],
+                                             ID=options[option]['lenovo_instance'],
                                              order=str(count))
                 else:
                     instance = etree.Element('instance',
-                                             ID=options[option]['ibm_instance'])
+                                             ID=options[option]['lenovo_instance'])
                 choice.append(instance)
 
-            if options[option]['ibm_reboot'] is True:
+            if options[option]['lenovo_reboot'] is True:
                 reboot = True
 
         if not changes:
@@ -312,8 +314,6 @@ class IBMFirmwareConfig(FirmwareConfig):
                                    size=len(data))
         self.imm_write(filehandle, len(data), data)
         self.imm_close(filehandle)
-
-        # FIXME - wait for commit
 
         if reboot is True:
             self.reboot_required = True

@@ -19,6 +19,6 @@ def create(vendor, host, user, password):
     elif vendor == "dell":
         return dell.DellFirmwareConfig(host, user, password)
     elif vendor == "ibm":
-        return ibm.IBMFirmwareConfig(host, user, password)
+        return ibm.LenovoFirmwareConfig(host, user, password)
 
     return None
