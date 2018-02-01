@@ -59,7 +59,7 @@ class LenovoFirmwareConfig(FirmwareConfig):
 
     def imm_open(self, filename, write=False, size=None):
         response = None
-        retries = 6
+        retries = 12
         data = []
         data += LENOVO_ENTERPRISE
         if write is False:
@@ -87,9 +87,8 @@ class LenovoFirmwareConfig(FirmwareConfig):
             except KeyError:
                 pass
 
-            time.sleep(10)
-            # Make sure that the connection hasn't timed out
-            self.imm_connect(self.host, self.user, self.password)
+            self.connection.ipmi_session.pause(5)
+
 
         filehandle = ''.join(chr(byte) for byte in response['data'][3:7])
 
@@ -191,7 +190,7 @@ class LenovoFirmwareConfig(FirmwareConfig):
             data = EfiDecompressor.Decompress(data)
             if len(data) != 0:
                 break
-            time.sleep(2)
+            self.connection.ipmi_session.pause(2)
 
         xml = etree.fromstring(data)
 
